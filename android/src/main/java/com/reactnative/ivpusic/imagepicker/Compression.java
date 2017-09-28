@@ -1,3 +1,4 @@
+/*
 package com.reactnative.ivpusic.imagepicker;
 
 import android.app.Activity;
@@ -13,9 +14,11 @@ import java.io.IOException;
 
 import id.zelory.compressor.Compressor;
 
+*/
 /**
  * Created by ipusic on 12/27/16.
- */
+ *//*
+
 
 public class Compression {
 
@@ -71,3 +74,4 @@ public class Compression {
         promise.resolve(originalVideo);
     }
 }
+*/

@@ -67,7 +67,6 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
     private String mediaType = "any";
     private boolean multiple = false;
     private boolean includeBase64 = false;
-    private boolean includeExif = false;
     private boolean cropping = false;
     private boolean cropperCircleOverlay = false;
     private boolean showCropGuidelines = true;
@@ -90,7 +89,6 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
     private Uri mCameraCaptureURI;
     private String mCurrentPhotoPath;
     private ResultCollector resultCollector;
-    private Compression compression = new Compression();
 
     PickerModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -113,7 +111,6 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
         mediaType = options.hasKey("mediaType") ? options.getString("mediaType") : mediaType;
         multiple = options.hasKey("multiple") && options.getBoolean("multiple");
         includeBase64 = options.hasKey("includeBase64") && options.getBoolean("includeBase64");
-        includeExif = options.hasKey("includeExif") && options.getBoolean("includeExif");
         width = options.hasKey("width") ? options.getInt("width") : width;
         height = options.hasKey("height") ? options.getInt("height") : height;
         cropping = options.hasKey("cropping") ? options.getBoolean("cropping") : cropping;
@@ -448,41 +445,23 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
     }
 
     private void getVideo(final Activity activity, final String path, final String mime) throws Exception {
-        validateVideo(path);
+
         final String compressedVideoPath = getTmpDir(activity) + "/" + UUID.randomUUID().toString() + ".mp4";
 
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                compression.compressVideo(activity, options, path, compressedVideoPath, new PromiseImpl(new Callback() {
-                    @Override
-                    public void invoke(Object... args) {
-                        String videoPath = (String) args[0];
+        try {
+            Bitmap bmp = validateVideo(path);
 
-                        try {
-                            Bitmap bmp = validateVideo(videoPath);
+            WritableMap video = new WritableNativeMap();
+            video.putInt("width", bmp.getWidth());
+            video.putInt("height", bmp.getHeight());
+            video.putString("mime", mime);
+            video.putInt("size", (int) new File(path).length());
+            video.putString("path", "file://" + path);
 
-                            WritableMap video = new WritableNativeMap();
-                            video.putInt("width", bmp.getWidth());
-                            video.putInt("height", bmp.getHeight());
-                            video.putString("mime", mime);
-                            video.putInt("size", (int) new File(videoPath).length());
-                            video.putString("path", "file://" + videoPath);
-
-                            resultCollector.notifySuccess(video);
-                        } catch (Exception e) {
-                            resultCollector.notifyProblem(E_NO_IMAGE_DATA_FOUND, e);
-                        }
-                    }
-                }, new Callback() {
-                    @Override
-                    public void invoke(Object... args) {
-                        WritableNativeMap ex = (WritableNativeMap) args[0];
-                        resultCollector.notifyProblem(ex.getString("code"), ex.getString("message"));
-                    }
-                }));
-            }
-        }).run();
+            resultCollector.notifySuccess(video);
+        } catch (Exception e) {
+            resultCollector.notifyProblem(E_NO_IMAGE_DATA_FOUND, e);
+        }
     }
 
     private String resolveRealPath(Activity activity, Uri uri, boolean isCamera) {
@@ -523,12 +502,9 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
         if (path.startsWith("http://") || path.startsWith("https://")) {
             throw new Exception("Cannot select remote files");
         }
-        validateImage(path);
 
-        // if compression options are provided image will be compressed. If none options is provided,
-        // then original image will be returned
-        File compressedImage = compression.compressImage(activity, options, path);
-        String compressedImagePath = compressedImage.getPath();
+        String compressedImagePath = path;
+
         BitmapFactory.Options options = validateImage(compressedImagePath);
 
         image.putString("path", "file://" + compressedImagePath);
@@ -539,15 +515,6 @@ class PickerModule extends ReactContextBaseJavaModule implements ActivityEventLi
 
         if (includeBase64) {
             image.putString("data", getBase64StringFromFile(compressedImagePath));
-        }
-
-        if (includeExif) {
-            try {
-                WritableMap exif = ExifExtractor.extract(path);
-                image.putMap("exif", exif);
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
         }
 
         return image;
